@@ -1,0 +1,267 @@
+import sys
+import os
+
+# --- FIX for pyinstaller for no-console bug ---
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
+
+import gradio as gr
+import ollama
+import time
+import json
+import datetime
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import Chroma
+from langchain_community.embeddings import OllamaEmbeddings
+
+# --- Setup & Constants ---
+DB_DIR = "./silversword_db"
+HISTORY_FILE = "chat_history.json"
+
+if not os.path.exists(DB_DIR):
+    os.makedirs(DB_DIR)
+
+embeddings = OllamaEmbeddings(model="nomic-embed-text")
+vector_db = Chroma(persist_directory=DB_DIR, embedding_function=embeddings)
+
+# --- NEW HELPER: Gradio 5 Text Extractor ---
+# Gradio 5 formats text as a list of dicts to support image uploads.
+# This ensures Ollama only ever receives a pure string.
+def extract_text(content):
+    if isinstance(content, str):
+        return content
+    elif isinstance(content, list):
+        return " ".join([item.get("text", "") for item in content if isinstance(item, dict) and "text" in item])
+    elif isinstance(content, dict):
+        return content.get("text", "")
+    return str(content)
+
+# --- Logic: File Management ---
+def get_installed_models():
+    """Fetch all models currently downloaded in Ollama."""
+    try:
+        # Execute the method
+        response = ollama.list()
+        # Using getattr() to grab the name of library calls
+        return [getattr(m, 'model', getattr(m, 'name', '')) for m in response.models]
+    except Exception as e:
+        print(f"Ollama connection error: {e}")
+        # Fallback to your default if Ollama is not responding
+        return ["qwen2.5:1.5b"]
+    
+def upload_file(files):
+    if not files: return "No files uploaded."
+    status = ""
+    for f in files:
+        loader = PyPDFLoader(f.name)
+        docs = loader.load()
+        splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+        vector_db.add_documents(splitter.split_documents(docs))
+        status += f"Berhasil: {os.path.basename(f.name)}\n"
+    return status
+
+def get_db_status():
+    try:
+        return f"Total potongan dokumen: {vector_db._collection.count()}"
+    except:
+        return "Database kosong."
+
+def clear_db():
+    global vector_db
+    vector_db.delete_collection()
+    vector_db = Chroma(persist_directory=DB_DIR, embedding_function=embeddings)
+    return "Database dibersihkan."
+
+# --- Logic: Chat History Management ---
+def get_saved_chats():
+    if not os.path.exists(HISTORY_FILE): return []
+    with open(HISTORY_FILE, "r") as f:
+        return list(json.load(f).keys())
+
+def save_chat(history):
+    if not history: return gr.update()
+    
+    data = {}
+    if os.path.exists(HISTORY_FILE):
+        with open(HISTORY_FILE, "r") as f:
+            data = json.load(f)
+            
+    # FIXED: Extract pure text for the save title
+    first_msg_content = extract_text(history[0]["content"])
+    short_msg = first_msg_content[:15] + "..." if len(first_msg_content) > 15 else first_msg_content
+    chat_name = f"{datetime.datetime.now().strftime('%d/%m %H:%M')} | {short_msg}"
+    
+    data[chat_name] = history
+    with open(HISTORY_FILE, "w") as f:
+        json.dump(data, f)
+        
+    return gr.update(choices=list(data.keys()), value=chat_name)
+
+def load_chat(chat_name):
+    if not chat_name or not os.path.exists(HISTORY_FILE): return []
+    with open(HISTORY_FILE, "r") as f:
+        data = json.load(f)
+    return data.get(chat_name, [])
+
+def delete_saved_chat(chat_name):
+    if not chat_name or not os.path.exists(HISTORY_FILE): 
+        return gr.update(), []
+    
+    with open(HISTORY_FILE, "r") as f:
+        data = json.load(f)
+        
+    if chat_name in data:
+        del data[chat_name]
+        with open(HISTORY_FILE, "w") as f:
+            json.dump(data, f)
+            
+    new_choices = list(data.keys())
+    return gr.update(choices=new_choices, value=None), []
+
+def clear_current_chat():
+    return []
+
+# --- Core Chat Engine ---
+def user_sends_message(user_message, history):
+    if history is None:
+        history = []
+    history.append({"role": "user", "content": user_message})
+    history.append({"role": "assistant", "content": ""})
+    return "", history
+
+def ai_responds(history, mode, system_prompt, model_name):
+    start_time = time.time()
+    if not history: return history
+    
+    # FIXED: Extract pure text from the user's message
+    user_message = extract_text(history[-2]["content"])
+    sys_msg = system_prompt
+    sources_text = ""
+    ollama_messages = []
+
+    # 1. Summarize Mode
+    if mode == "Summarize":
+        try:
+            db_data = vector_db.get(limit=15)
+            if not db_data['documents']:
+                history[-1]["content"] = "❌ Database kosong. Silakan upload PDF."
+                yield history
+                return
+            context = "\n---\n".join(db_data['documents'])
+            ollama_messages = [
+                {'role': 'system', 'content': 'Buatlah ringkasan terstruktur dari dokumen berikut.'},
+                {'role': 'user', 'content': f"Rangkum materi ini:\n{context}"}
+            ]
+        except Exception as e:
+            history[-1]["content"] = f"❌ Error: {str(e)}"
+            yield history
+            return
+
+    # 2. RAG & Basic Mode
+    else:
+        if mode == "RAG":
+            try:
+                results = vector_db.similarity_search(user_message, k=3)
+                context_chunks = []
+                for i, doc in enumerate(results):
+                    context_chunks.append(doc.page_content)
+                    source_name = os.path.basename(doc.metadata.get('source', 'Unknown'))
+                    sources_text += f"\n* Sumber {i+1}: {source_name} (Hal {doc.metadata.get('page', 0)})"
+                if context_chunks:
+                    sys_msg += "\n\nGunakan Konteks Dokumen Berikut:\n" + "\n---\n".join(context_chunks)
+            except:
+                sources_text = "\n[Database kosong]"
+
+        ollama_messages.append({'role': 'system', 'content': sys_msg})
+        
+        # FIXED: Extract pure text from history
+        for msg in history[:-2]:
+            if msg["role"] == "user":
+                ollama_messages.append({'role': 'user', 'content': extract_text(msg["content"])})
+            elif msg["role"] == "assistant" and msg["content"]:
+                clean_a = extract_text(msg["content"]).split("<hr>")[0]
+                ollama_messages.append({'role': 'assistant', 'content': clean_a})
+                
+        ollama_messages.append({'role': 'user', 'content': user_message})
+
+    # 3. Stream Response
+    response = ollama.chat(model=model_name, messages=ollama_messages, stream=True)
+    partial_msg = ""
+    for chunk in response:
+        partial_msg += chunk['message']['content']
+        history[-1]["content"] = partial_msg 
+        yield history 
+        
+    # 4. Append Timer & Sources
+    if mode == "RAG" and sources_text:
+        partial_msg += f"\n\n<hr>**Referensi:**{sources_text}"
+    elapsed = round(time.time() - start_time, 2)
+    partial_msg += f"\n\n<hr>⏱️ *Waktu: {elapsed} detik*"
+    
+    history[-1]["content"] = partial_msg
+    yield history
+
+# --- UI Layout ---
+custom_css = """
+.logo { display:flex; background-color: #e6fced; height: 70px; border-radius: 8px; justify-content: center; align-items: center; margin-bottom: 10px; }
+footer { display: none !important; }
+"""
+
+with gr.Blocks(theme=gr.themes.Soft(primary_hue="green"), css=custom_css) as demo:
+    gr.HTML("<div class='logo'><h1 style='color:#2e7d32; font-weight: 900; font-size: 1.8em; margin:0;'>🌿 FOLIUM AI</h1></div>")
+    
+    with gr.Row():
+        with gr.Column(scale=3, min_width=250):
+            mode = gr.Radio(["RAG", "Basic", "Summarize"], label="Mode", value="Basic")
+            model_dropdown = gr.Dropdown(choices=get_installed_models(), value="qwen2.5:1.5b", label="AI Model", scale=4)
+            refresh_model_btn = gr.Button("🔄 Refresh", scale=1, min_width=50)
+            
+            with gr.Accordion("📂 Riwayat Obrolan", open=False):
+                chat_dropdown = gr.Dropdown(choices=get_saved_chats(), label="Pilih Obrolan Lama")
+                with gr.Row():
+                    load_btn = gr.Button("Buka", size="sm")
+                    del_chat_btn = gr.Button("Hapus", variant="stop", size="sm")
+            
+            with gr.Accordion("⚙️ Pengaturan Prompt", open=False):
+                system_prompt_input = gr.Textbox(value="Anda adalah asisten akademik yang ahli.", label="System Prompt", lines=2)
+            
+            with gr.Accordion("📚 Dokumen Sekolah", open=False):
+                upload_button = gr.File(label="Upload PDF", file_count="multiple", file_types=[".pdf"])
+                db_status = gr.Textbox(value=get_db_status(), label="Status DB", interactive=False)
+                delete_db_btn = gr.Button("🗑️ Kosongkan Database", variant="stop")
+                
+                upload_button.upload(upload_file, inputs=[upload_button], outputs=[db_status]).then(get_db_status, outputs=[db_status])
+                delete_db_btn.click(clear_db, outputs=[db_status])
+
+        with gr.Column(scale=7, min_width=300):
+            chatbot = gr.Chatbot(height=500, label="Pusat Belajar")
+            
+            with gr.Row():
+                msg_input = gr.Textbox(show_label=False, placeholder="Ketik pertanyaan di sini...", scale=8)
+                submit_btn = gr.Button("Kirim", scale=1, variant="primary")
+            
+            with gr.Row():
+                new_chat_btn = gr.Button("💬 Chat Baru")
+                save_chat_btn = gr.Button("💾 Simpan Chat Ini")
+
+            submit_event = msg_input.submit(user_sends_message, [msg_input, chatbot], [msg_input, chatbot], queue=False).then(
+                ai_responds, [chatbot, mode, system_prompt_input, model_dropdown], chatbot
+            )
+            submit_btn.click(user_sends_message, [msg_input, chatbot], [msg_input, chatbot], queue=False).then(
+                ai_responds, [chatbot, mode, system_prompt_input, model_dropdown], chatbot
+            )
+            
+            new_chat_btn.click(clear_current_chat, outputs=[chatbot])
+            save_chat_btn.click(save_chat, inputs=[chatbot], outputs=[chat_dropdown])
+            load_btn.click(load_chat, inputs=[chat_dropdown], outputs=[chatbot])
+            del_chat_btn.click(delete_saved_chat, inputs=[chat_dropdown], outputs=[chat_dropdown, chatbot])
+            refresh_model_btn.click(
+                fn=lambda: gr.Dropdown(choices=get_installed_models()), 
+                outputs=[model_dropdown]
+            )
+
+if __name__ == "__main__":
+    demo.launch(inbrowser=True, quiet=True)

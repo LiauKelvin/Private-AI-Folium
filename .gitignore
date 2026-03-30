@@ -1,0 +1,13 @@
+# Virtual Environment
+.venv/
+venv/
+ENV/
+
+# Python Build/Dist artifacts
+build/
+dist/
+*.spec
+*.pyd
+
+# Local AI/Database folders
+chromadb/
