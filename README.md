@@ -1,7 +1,7 @@
 # 🌿 Virtual-Assistant-AI-Folium (Folium AI)
 
 <p align="center">
-  <img src="AI ICON.png" alt="Folium AI Icon" width="150">
+  <img src="https://github.com/LiauKelvin/Private-AI-Folium/blob/main/.asset_AI/AI_ICON.png?raw=true" alt="Folium AI Icon" width="150">
 </p>
 
 ## 📖 Tentang Program
