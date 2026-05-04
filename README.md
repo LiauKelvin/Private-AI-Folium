@@ -2,6 +2,8 @@
 
 <p align="center">
   <img src="https://github.com/LiauKelvin/Private-AI-Folium/blob/main/.asset_AI/AI_ICON.png?raw=true" alt="Folium AI Icon" width="150">
+  <img src="https://github.com/LiauKelvin/Private-AI-Folium/blob/main/.asset_AI/Ollama%20picture.webp?raw=true" alt="Folium AI Icon" width="150">
+  <img src="https://github.com/LiauKelvin/Private-AI-Folium/blob/main/.asset_AI/gradio.png?raw=true" alt="Folium AI Icon" width="150">
 </p>
 
 ## 📖 Tentang Program
@@ -28,7 +30,7 @@ Sebelum menginstal aplikasi, pastikan perangkat Anda memenuhi spesifikasi beriku
 ## 🛠️ Cara Instalasi untuk Developer (Perancang)
 Bagian ini ditujukan bagi pengembang yang ingin melihat, memodifikasi, atau menjalankan *source code* secara langsung menggunakan Python.
 
-![Instalasi Developer](img_inst_dev.png)
+![Instalasi Developer](https://github.com/LiauKelvin/Private-AI-Folium/blob/main/.asset_AI/img_inst_dev.png?raw=true)
 
 **Langkah-langkah Instalasi:**
 1.  **Instalasi Ollama:** Unduh dan instal platform Ollama beserta Model AI yang diinginkan melalui situs resmi [ollama.com](https://ollama.com).
@@ -52,7 +54,7 @@ Bagian ini ditujukan bagi pengembang yang ingin melihat, memodifikasi, atau menj
 ## 🚀 Cara Instalasi untuk Pengguna (*User*)
 Bagian ini ditujukan bagi pengguna akhir yang ingin langsung menggunakan aplikasi tanpa perlu berurusan dengan *coding* atau *environment* Python.
 
-![Instalasi Pengguna](img_inst_user.png)
+![Instalasi Pengguna](https://github.com/LiauKelvin/Private-AI-Folium/blob/main/.asset_AI/img_inst_user.png?raw=true)
 
 **Langkah-langkah Instalasi:**
 1.  **Instalasi Ollama:** Unduh dan instal platform Ollama beserta Model AI yang dibutuhkan melalui situs resmi [ollama.com](https://ollama.com). *(Wajib dilakukan agar aplikasi memiliki "otak" untuk berpikir).*
