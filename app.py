@@ -219,7 +219,7 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="green"), css=custom_css) as dem
             model_dropdown = gr.Dropdown(choices=get_installed_models(), value="qwen2.5:1.5b", label="AI Model", scale=4)
             refresh_model_btn = gr.Button("🔄 Refresh", scale=1, min_width=50)
             
-            with gr.Accordion("📂 Riwayat Obrolan", open=False):
+            with gr.Accordion("📂 Riwayat Percakapan", open=False):
                 chat_dropdown = gr.Dropdown(choices=get_saved_chats(), label="Pilih Obrolan Lama")
                 with gr.Row():
                     load_btn = gr.Button("Buka", size="sm")
@@ -228,7 +228,7 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="green"), css=custom_css) as dem
             with gr.Accordion("⚙️ Pengaturan Prompt", open=False):
                 system_prompt_input = gr.Textbox(value="Anda adalah asisten akademik yang ahli.", label="System Prompt", lines=2)
             
-            with gr.Accordion("📚 Dokumen Sekolah", open=False):
+            with gr.Accordion("📚 Dokumen Pribadi", open=False):
                 upload_button = gr.File(label="Upload PDF", file_count="multiple", file_types=[".pdf"])
                 db_status = gr.Textbox(value=get_db_status(), label="Status DB", interactive=False)
                 delete_db_btn = gr.Button("🗑️ Kosongkan Database", variant="stop")
@@ -241,7 +241,7 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="green"), css=custom_css) as dem
             
             with gr.Row():
                 msg_input = gr.Textbox(show_label=False, placeholder="Ketik pertanyaan di sini...", scale=8)
-                submit_btn = gr.Button("Kirim", scale=1, variant="primary")
+                submit_btn = gr.Button("Kirim ➤", scale=1, variant="primary")
             
             with gr.Row():
                 new_chat_btn = gr.Button("💬 Chat Baru")
