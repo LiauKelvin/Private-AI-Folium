@@ -7,14 +7,14 @@
 </p>
 
 ## 📖 Tentang Program
-**Folium AI** adalah sebuah Sistem Informasi *Virtual Assistant* berbasis Kecerdasan Buatan (AI) yang dirancang khusus untuk kebutuhan personal dengan mengedepankan **privasi dan kedaulatan data**. 
+**Folium AI** adalah sebuah Sistem Informasi *Virtual Assistant* berbasis Kecerdasan Buatan (AI) yang dirancang khusus dapat berjalan pada perangkat pribadi untuk kebutuhan personal dengan mengedepankan **privasi dan kedaulatan data**. 
 
-Berjalan 100% secara lokal (*offline*) menggunakan platform **Ollama** dan mengadopsi arsitektur *Retrieval-Augmented Generation* (RAG), aplikasi ini memungkinkan pengguna untuk berinteraksi, bertanya, dan mencari informasi dari dokumen pribadi tanpa perlu mengirimkan data ke *server* atau *cloud* internet. Semua pemrosesan teks dan *embedding* dokumen terjadi secara aman di dalam perangkat pengguna.
+Berjalan 100% secara lokal (*offline*) menggunakan platform **Ollama** serta UI dari **Gradio**, dengan mengadopsi arsitektur *Retrieval-Augmented Generation* (RAG), aplikasi ini memungkinkan pengguna untuk berinteraksi, bertanya, dan mencari informasi dari dokumen pribadi tanpa perlu mengirimkan data ke *server* atau *cloud* internet. Semua pemrosesan teks dan *embedding* dokumen terjadi secara aman di dalam perangkat pengguna sendiri.
 
 ### ✨ Fitur Utama:
-*   **100% Local & Private:** Tidak memerlukan koneksi internet, menjamin kerahasiaan dokumen pribadi.
+*   **100% Local & Private:** Tidak memerlukan koneksi internet, berjalan secara lokal untuk menjamin kerahasiaan dokumen pribadi.
 *   **Integrasi Ollama:** Menggunakan ekosistem *Local LLM* yang efisien dan cepat.
-*   **Interaksi Dokumen (RAG):** Membaca dan menjawab pertanyaan berdasarkan dokumen spesifik yang diunggah pengguna.
+*   **Interaksi Dokumen (RAG):** Membaca dan menjawab pertanyaan berdasarkan dokumen spesifik yang diunggah pengguna (*users*).
 *   **Antarmuka Pengguna Sederhana:** Tersedia dalam bentuk aplikasi (*executable*) yang mudah digunakan oleh pengguna non-teknis.
 
 ---
@@ -23,11 +23,11 @@ Berjalan 100% secara lokal (*offline*) menggunakan platform **Ollama** dan menga
 Sebelum menginstal aplikasi, pastikan perangkat Anda memenuhi spesifikasi berikut:
 *   **Sistem Operasi:** Windows 10/11 (Untuk versi `.exe`).
 *   **RAM:** Minimal 8 GB (Direkomendasikan 16 GB untuk kelancaran model LLM).
-*   **Penyimpanan:** Ruang kosong yang cukup untuk mengunduh model Ollama (bervariasi tergantung model, misal: ~4.7 GB untuk Llama 3).
+*   **Penyimpanan:** Ruang kosong yang cukup untuk mengunduh model Ollama (bervariasi tergantung model, misal: ~4.7 GB untuk Llama 3) serta aplikasi Ollama itu sendiri yang berkisar ~1.7 GB.
 
 ---
 
-## 🛠️ Cara Instalasi untuk Developer (Perancang)
+## 🛠️ Cara Instalasi untuk Developer (Pengembang)
 Bagian ini ditujukan bagi pengembang yang ingin melihat, memodifikasi, atau menjalankan *source code* secara langsung menggunakan Python.
 
 ![Instalasi Developer](https://github.com/LiauKelvin/Private-AI-Folium/blob/main/.asset_AI/img_inst_dev.png?raw=true)
@@ -60,18 +60,21 @@ Bagian ini ditujukan bagi pengguna akhir yang ingin langsung menggunakan aplikas
 1.  **Instalasi Ollama:** Unduh dan instal platform Ollama beserta Model AI yang dibutuhkan melalui situs resmi [ollama.com](https://ollama.com). *(Wajib dilakukan agar aplikasi memiliki "otak" untuk berpikir).*
 2.  **Unduh Aplikasi:** Buka halaman *Release* pada tautan GitHub berikut dan unduh *file* **Folium_AI.exe** (ukuran file sekitar 135 MB): 
     [Download Folium_AI.exe v1.0.0](https://github.com/LiauKelvin/Private-AI-Folium/releases/tag/v1.0.0)
-3.  **Jalankan Aplikasi:** Klik ganda (*double-click*) pada *file* `Folium_AI.exe` yang telah diunduh pada sistem operasi Anda untuk mulai berinteraksi dengan *Virtual Assistant*.
+3.  **Jalankan Aplikasi:** Klik ganda (*double-click*) pada *file* `Folium_AI.exe` yang telah diunduh pada sistem operasi Anda dan tunggu beberapa saat (~*sekitar 30-60 detik*) untuk mulai berinteraksi dengan *Virtual Assistant* berbasis AI.
 
 ---
 
 ## 🤝 Penutup & Kontribusi
-Terima kasih telah menggunakan **Private-AI-Folium**. Proyek ini dikembangkan sebagai bagian dari penelitian rancang bangun sistem informasi *Virtual Assistant* yang memprioritaskan keamanan data pengguna. 
+Terima kasih telah menggunakan **Private-AI-Folium**. Proyek ini dikembangkan sebagai bagian dari penelitian rancang bangun sistem informasi *Virtual Assistant* berbasis AI yang memprioritaskan keamanan data pengguna. 
 
-Jika Anda menemukan *bug* (kesalahan program) atau memiliki saran pengembangan fitur baru, jangan ragu untuk membuka *Issue* atau mengirimkan *Pull Request* di *repository* ini. Dukungan dan masukan Anda sangat berarti untuk pengembangan *Local AI* yang lebih baik ke depannya!
+Jika Anda menemukan *bug* (kesalahan program) atau memiliki saran pengembangan fitur baru, jangan ragu untuk membuka *Issue* atau mengirimkan *Pull Request* di *repository* ini. Dukungan dan masukan Anda akan sangat berarti untuk pengembangan *Local AI* yang lebih baik ke depannya!
 
 ---
 *Dibuat dengan ☕ dan dedikasi untuk Privasi Data.*
 
 ***
 
-### 💡 Tips Tambahan untuk Repositorimu:
+### 💡 Tips Tambahan untuk Pengembangan Sistem AI lebih lanjut:
+1. **Pengembangan UI:** Sistem dapat dikembangkan kembali untuk tampilan (*interface*) agar lebih mudah untuk digunakan, sistematis, dan sesuai dengan berbagai ukuran tampilan perangkat.
+2. **Kompatibilitas OS:** Sistem dapat dikembangkan untuk sesuai dengan berbagai perangkat sistem operasi (*operating system*) seperti Linux, Android, dan Mac OS.
+3. **Variasi Dokumen:** Sistem dapat mengelola lebih banyak variasi dokumen selain .pdf seperti .txt, .ppt, .docs, dll.
