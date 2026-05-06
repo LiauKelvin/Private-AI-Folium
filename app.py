@@ -1,14 +1,6 @@
-import sys
-import os
-
-# --- FIX for pyinstaller for no-console bug ---
-if sys.stdout is None:
-    sys.stdout = open(os.devnull, "w")
-if sys.stderr is None:
-    sys.stderr = open(os.devnull, "w")
-
 import gradio as gr
 import ollama
+import os
 import time
 import json
 import datetime
@@ -18,7 +10,7 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import OllamaEmbeddings
 
 # --- Setup & Constants ---
-DB_DIR = "./silversword_db"
+DB_DIR = "./folium_db"
 HISTORY_FILE = "chat_history.json"
 
 if not os.path.exists(DB_DIR):
@@ -27,31 +19,23 @@ if not os.path.exists(DB_DIR):
 embeddings = OllamaEmbeddings(model="nomic-embed-text")
 vector_db = Chroma(persist_directory=DB_DIR, embedding_function=embeddings)
 
-# --- NEW HELPER: Gradio 5 Text Extractor ---
-# Gradio 5 formats text as a list of dicts to support image uploads.
-# This ensures Ollama only ever receives a pure string.
 def extract_text(content):
-    if isinstance(content, str):
-        return content
-    elif isinstance(content, list):
-        return " ".join([item.get("text", "") for item in content if isinstance(item, dict) and "text" in item])
-    elif isinstance(content, dict):
-        return content.get("text", "")
+    if isinstance(content, str): return content
+    elif isinstance(content, list): return " ".join([item.get("text", "") for item in content if isinstance(item, dict) and "text" in item])
+    elif isinstance(content, dict): return content.get("text", "")
     return str(content)
 
 # --- Logic: File Management ---
 def get_installed_models():
-    """Fetch all models currently downloaded in Ollama."""
     try:
-        # Execute the method
         response = ollama.list()
-        # Using getattr() to grab the name of library calls
-        return [getattr(m, 'model', getattr(m, 'name', '')) for m in response.models]
+        all_models = [getattr(m, 'model', getattr(m, 'name', '')) for m in response.models]
+        chat_models = [m for m in all_models if "nomic" not in m.lower() and "embed" not in m.lower()]
+        return chat_models
     except Exception as e:
         print(f"Ollama connection error: {e}")
-        # Fallback to your default if Ollama is not responding
         return ["qwen2.5:1.5b"]
-    
+
 def upload_file(files):
     if not files: return "No files uploaded."
     status = ""
@@ -83,51 +67,50 @@ def get_saved_chats():
 
 def save_chat(history):
     if not history: return gr.update()
-    
     data = {}
     if os.path.exists(HISTORY_FILE):
-        with open(HISTORY_FILE, "r") as f:
-            data = json.load(f)
-            
-    # FIXED: Extract pure text for the save title
+        with open(HISTORY_FILE, "r") as f: data = json.load(f)
     first_msg_content = extract_text(history[0]["content"])
     short_msg = first_msg_content[:15] + "..." if len(first_msg_content) > 15 else first_msg_content
     chat_name = f"{datetime.datetime.now().strftime('%d/%m %H:%M')} | {short_msg}"
-    
     data[chat_name] = history
-    with open(HISTORY_FILE, "w") as f:
-        json.dump(data, f)
-        
+    with open(HISTORY_FILE, "w") as f: json.dump(data, f)
     return gr.update(choices=list(data.keys()), value=chat_name)
 
 def load_chat(chat_name):
     if not chat_name or not os.path.exists(HISTORY_FILE): return []
-    with open(HISTORY_FILE, "r") as f:
-        data = json.load(f)
+    with open(HISTORY_FILE, "r") as f: data = json.load(f)
     return data.get(chat_name, [])
 
 def delete_saved_chat(chat_name):
-    if not chat_name or not os.path.exists(HISTORY_FILE): 
-        return gr.update(), []
-    
-    with open(HISTORY_FILE, "r") as f:
-        data = json.load(f)
-        
+    if not chat_name or not os.path.exists(HISTORY_FILE): return gr.update(), []
+    with open(HISTORY_FILE, "r") as f: data = json.load(f)
     if chat_name in data:
         del data[chat_name]
-        with open(HISTORY_FILE, "w") as f:
-            json.dump(data, f)
-            
-    new_choices = list(data.keys())
-    return gr.update(choices=new_choices, value=None), []
+        with open(HISTORY_FILE, "w") as f: json.dump(data, f)
+    return gr.update(choices=list(data.keys()), value=None), []
 
 def clear_current_chat():
     return []
 
+def rename_saved_chat(old_name, new_name):
+    if not old_name or not new_name or not os.path.exists(HISTORY_FILE):
+        return gr.update(), gr.update()
+    
+    with open(HISTORY_FILE, "r") as f:
+        data = json.load(f)
+        
+    if old_name in data and new_name not in data:
+        data[new_name] = data.pop(old_name)
+        with open(HISTORY_FILE, "w") as f:
+            json.dump(data, f)
+            
+    new_choices = list(data.keys())
+    return gr.update(choices=new_choices, value=new_name), gr.update(value="")
+
 # --- Core Chat Engine ---
 def user_sends_message(user_message, history):
-    if history is None:
-        history = []
+    if history is None: history = []
     history.append({"role": "user", "content": user_message})
     history.append({"role": "assistant", "content": ""})
     return "", history
@@ -136,13 +119,13 @@ def ai_responds(history, mode, system_prompt, model_name):
     start_time = time.time()
     if not history: return history
     
-    # FIXED: Extract pure text from the user's message
     user_message = extract_text(history[-2]["content"])
     sys_msg = system_prompt
     sources_text = ""
     ollama_messages = []
+    current_temp = 0.7 
 
-    # 1. Summarize Mode
+    # Mode Summarize
     if mode == "Summarize":
         try:
             db_data = vector_db.get(limit=15)
@@ -152,32 +135,55 @@ def ai_responds(history, mode, system_prompt, model_name):
                 return
             context = "\n---\n".join(db_data['documents'])
             ollama_messages = [
-                {'role': 'system', 'content': 'Buatlah ringkasan terstruktur dari dokumen berikut.'},
+                {'role': 'system', 'content': 'Anda adalah ahli perangkum. Buatlah ringkasan dari dokumen berikut HANYA dalam 3-5 poin-poin utama yang singkat, padat, dan jelas. Hindari kalimat bertele-tele.'},
                 {'role': 'user', 'content': f"Rangkum materi ini:\n{context}"}
             ]
+            current_temp = 0.3 
         except Exception as e:
             history[-1]["content"] = f"❌ Error: {str(e)}"
             yield history
             return
 
-    # 2. RAG & Basic Mode
     else:
+        # Mode RAG
         if mode == "RAG":
             try:
-                results = vector_db.similarity_search(user_message, k=3)
+                results = vector_db.similarity_search(user_message, k=8)
                 context_chunks = []
                 for i, doc in enumerate(results):
                     context_chunks.append(doc.page_content)
                     source_name = os.path.basename(doc.metadata.get('source', 'Unknown'))
                     sources_text += f"\n* Sumber {i+1}: {source_name} (Hal {doc.metadata.get('page', 0)})"
-                if context_chunks:
-                    sys_msg += "\n\nGunakan Konteks Dokumen Berikut:\n" + "\n---\n".join(context_chunks)
-            except:
-                sources_text = "\n[Database kosong]"
+                
+                if not context_chunks:
+                    history[-1]["content"] = "❌ Anda belum mengupload dokumen. Silakan upload PDF!"
+                    yield history
+                    return
+
+                sys_msg = (
+                    "Anda adalah asisten AI yang sangat teliti. Anda HANYA boleh menjawab "
+                    "berdasarkan teks di dalam [KONTEKS DOKUMEN] di bawah ini. "
+                    "DILARANG KERAS menggunakan pengetahuan Anda sendiri di luar dokumen. "
+                    "Jawablah dengan LENGKAP, DETAIL, dan MENYELURUH sesuai dengan informasi yang ada di dokumen. "
+                    "Jika pertanyaan pengguna tidak ada hubungannya atau tidak ditemukan "
+                    "jawabannya di dalam [KONTEKS DOKUMEN], Anda WAJIB menjawab dengan: "
+                    "'Maaf, informasi tersebut tidak ditemukan di dalam dokumen.'\n\n"
+                    "[KONTEKS DOKUMEN]:\n"
+                ) + "\n---\n".join(context_chunks)
+                current_temp = 0.0 
+
+            except Exception as e:
+                history[-1]["content"] = "❌ Database kosong. Silakan upload PDF terlebih dahulu."
+                yield history
+                return
+
+        # Mode Basic
+        elif mode == "Basic":
+            sys_msg = system_prompt + "\n\nInstruksi Tambahan: Jawablah dengan ringkas dan langsung ke intinya. Hindari penjelasan panjang lebar kecuali diminta."
+            current_temp = 0.7
 
         ollama_messages.append({'role': 'system', 'content': sys_msg})
         
-        # FIXED: Extract pure text from history
         for msg in history[:-2]:
             if msg["role"] == "user":
                 ollama_messages.append({'role': 'user', 'content': extract_text(msg["content"])})
@@ -187,15 +193,19 @@ def ai_responds(history, mode, system_prompt, model_name):
                 
         ollama_messages.append({'role': 'user', 'content': user_message})
 
-    # 3. Stream Response
-    response = ollama.chat(model=model_name, messages=ollama_messages, stream=True)
+    response = ollama.chat(
+        model=model_name, 
+        messages=ollama_messages, 
+        stream=True,
+        options={"temperature": current_temp}
+    )
+    
     partial_msg = ""
     for chunk in response:
         partial_msg += chunk['message']['content']
         history[-1]["content"] = partial_msg 
         yield history 
         
-    # 4. Append Timer & Sources
     if mode == "RAG" and sources_text:
         partial_msg += f"\n\n<hr>**Referensi:**{sources_text}"
     elapsed = round(time.time() - start_time, 2)
@@ -205,22 +215,30 @@ def ai_responds(history, mode, system_prompt, model_name):
     yield history
 
 # --- UI Layout ---
+
+# FIX: Added .no-wrap-row to forcefully stop horizontal wrapping
 custom_css = """
+.gradio-container { max-width: 98% !important; width: 100% !important; }
 .logo { display:flex; background-color: #e6fced; height: 70px; border-radius: 8px; justify-content: center; align-items: center; margin-bottom: 10px; }
 footer { display: none !important; }
+.refresh-btn { margin-top: 15px !important; }
+.no-wrap-row { flex-wrap: nowrap !important; }
 """
 
-with gr.Blocks(theme=gr.themes.Soft(primary_hue="green"), css=custom_css) as demo:
+with gr.Blocks(title="Folium AI", theme=gr.themes.Soft(primary_hue="green"), css=custom_css) as demo:
     gr.HTML("<div class='logo'><h1 style='color:#2e7d32; font-weight: 900; font-size: 1.8em; margin:0;'>🌿 FOLIUM AI</h1></div>")
     
     with gr.Row():
         with gr.Column(scale=3, min_width=250):
             mode = gr.Radio(["RAG", "Basic", "Summarize"], label="Mode", value="Basic")
-            model_dropdown = gr.Dropdown(choices=get_installed_models(), value="qwen2.5:1.5b", label="AI Model", scale=4)
-            refresh_model_btn = gr.Button("🔄 Refresh", scale=1, min_width=50)
+            
+            with gr.Row(equal_height=False, elem_classes=["no-wrap-row"]):
+                model_dropdown = gr.Dropdown(choices=get_installed_models(), value="qwen2.5:1.5b", label="AI Model", scale=4, min_width=120)
+                refresh_model_btn = gr.Button("🔄 Refresh", scale=1, min_width=50, elem_classes=["refresh-btn"])
             
             with gr.Accordion("📂 Riwayat Percakapan", open=False):
-                chat_dropdown = gr.Dropdown(choices=get_saved_chats(), label="Pilih Obrolan Lama")
+                chat_dropdown = gr.Dropdown(choices=get_saved_chats(), label="Pilih Riwayat Percakapan")
+                rename_input = gr.Textbox(show_label=False, placeholder="Ubah Nama & 'enter..'")
                 with gr.Row():
                     load_btn = gr.Button("Buka", size="sm")
                     del_chat_btn = gr.Button("Hapus", variant="stop", size="sm")
@@ -247,6 +265,11 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="green"), css=custom_css) as dem
                 new_chat_btn = gr.Button("💬 Chat Baru")
                 save_chat_btn = gr.Button("💾 Simpan Chat Ini")
 
+            # --- Events ---
+            refresh_model_btn.click(fn=lambda: gr.Dropdown(choices=get_installed_models()), outputs=[model_dropdown])
+            
+            rename_input.submit(rename_saved_chat, inputs=[chat_dropdown, rename_input], outputs=[chat_dropdown, rename_input])
+            
             submit_event = msg_input.submit(user_sends_message, [msg_input, chatbot], [msg_input, chatbot], queue=False).then(
                 ai_responds, [chatbot, mode, system_prompt_input, model_dropdown], chatbot
             )
@@ -258,10 +281,10 @@ with gr.Blocks(theme=gr.themes.Soft(primary_hue="green"), css=custom_css) as dem
             save_chat_btn.click(save_chat, inputs=[chatbot], outputs=[chat_dropdown])
             load_btn.click(load_chat, inputs=[chat_dropdown], outputs=[chatbot])
             del_chat_btn.click(delete_saved_chat, inputs=[chat_dropdown], outputs=[chat_dropdown, chatbot])
-            refresh_model_btn.click(
-                fn=lambda: gr.Dropdown(choices=get_installed_models()), 
-                outputs=[model_dropdown]
-            )
 
 if __name__ == "__main__":
+    import sys
+    import os
+    if sys.stdout is None: sys.stdout = open(os.devnull, "w")
+    if sys.stderr is None: sys.stderr = open(os.devnull, "w")
     demo.launch(inbrowser=True, quiet=True)
