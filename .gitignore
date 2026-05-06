@@ -11,3 +11,5 @@ dist/
 
 # Local AI/Database folders
 chromadb/
+folium_db/
+silversword_db
