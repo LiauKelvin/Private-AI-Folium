@@ -8,6 +8,7 @@ build/
 dist/
 *.spec
 *.pyd
+*.json
 
 # Local AI/Database folders
 chromadb/

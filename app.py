@@ -219,14 +219,14 @@ def ai_responds(history, mode, system_prompt, model_name):
 # FIX: Added .no-wrap-row to forcefully stop horizontal wrapping
 custom_css = """
 .gradio-container { max-width: 98% !important; width: 100% !important; }
-.logo { display:flex; background-color: #e6fced; height: 70px; border-radius: 8px; justify-content: center; align-items: center; margin-bottom: 10px; }
+.logo { display:flex; background-color: #FCC6BB; height: 70px; border-radius: 8px; justify-content: center; align-items: center; margin-bottom: 10px; }
 footer { display: none !important; }
 .refresh-btn { margin-top: 15px !important; }
 .no-wrap-row { flex-wrap: nowrap !important; }
 """
 
-with gr.Blocks(title="Folium AI", theme=gr.themes.Soft(primary_hue="green"), css=custom_css) as demo:
-    gr.HTML("<div class='logo'><h1 style='color:#2e7d32; font-weight: 900; font-size: 1.8em; margin:0;'>🌿 FOLIUM AI</h1></div>")
+with gr.Blocks(title="Folium AI", theme=gr.themes.Soft(primary_hue="red"), css=custom_css) as demo:
+    gr.HTML("<div class='logo'><h1 style='color:#9C2007; font-weight: 900; font-size: 1.8em; margin:0;'>🍁 FOLIUM AI</h1></div>")
     
     with gr.Row():
         with gr.Column(scale=3, min_width=250):
@@ -234,22 +234,22 @@ with gr.Blocks(title="Folium AI", theme=gr.themes.Soft(primary_hue="green"), css
             
             with gr.Row(equal_height=False, elem_classes=["no-wrap-row"]):
                 model_dropdown = gr.Dropdown(choices=get_installed_models(), value="qwen2.5:1.5b", label="AI Model", scale=4, min_width=120)
-                refresh_model_btn = gr.Button("🔄 Refresh", scale=1, min_width=50, elem_classes=["refresh-btn"])
+                refresh_model_btn = gr.Button("🔁 Refresh", scale=1, min_width=50, elem_classes=["refresh-btn"])
             
-            with gr.Accordion("📂 Riwayat Percakapan", open=False):
+            with gr.Accordion("📜 Riwayat Percakapan", open=False):
                 chat_dropdown = gr.Dropdown(choices=get_saved_chats(), label="Pilih Riwayat Percakapan")
                 rename_input = gr.Textbox(show_label=False, placeholder="Ubah Nama & 'enter..'")
                 with gr.Row():
                     load_btn = gr.Button("Buka", size="sm")
                     del_chat_btn = gr.Button("Hapus", variant="stop", size="sm")
             
-            with gr.Accordion("⚙️ Pengaturan Prompt", open=False):
+            with gr.Accordion("🛠️ Pengaturan Prompt", open=False):
                 system_prompt_input = gr.Textbox(value="Anda adalah asisten akademik yang ahli.", label="System Prompt", lines=2)
             
-            with gr.Accordion("📚 Dokumen Pribadi", open=False):
+            with gr.Accordion("🗃️ Dokumen Pribadi", open=False):
                 upload_button = gr.File(label="Upload PDF", file_count="multiple", file_types=[".pdf"])
                 db_status = gr.Textbox(value=get_db_status(), label="Status DB", interactive=False)
-                delete_db_btn = gr.Button("🗑️ Kosongkan Database", variant="stop")
+                delete_db_btn = gr.Button("🗑️🚮 Kosongkan Database", variant="stop")
                 
                 upload_button.upload(upload_file, inputs=[upload_button], outputs=[db_status]).then(get_db_status, outputs=[db_status])
                 delete_db_btn.click(clear_db, outputs=[db_status])
@@ -259,11 +259,11 @@ with gr.Blocks(title="Folium AI", theme=gr.themes.Soft(primary_hue="green"), css
             
             with gr.Row():
                 msg_input = gr.Textbox(show_label=False, placeholder="Ketik pertanyaan di sini...", scale=8)
-                submit_btn = gr.Button("Kirim ➤", scale=1, variant="primary")
+                submit_btn = gr.Button("Kirim ⌯⌲", scale=1, variant="primary")
             
             with gr.Row():
-                new_chat_btn = gr.Button("💬 Chat Baru")
-                save_chat_btn = gr.Button("💾 Simpan Chat Ini")
+                new_chat_btn = gr.Button("💭 Chat Baru")
+                save_chat_btn = gr.Button("📥 Simpan Chat Ini")
 
             # --- Events ---
             refresh_model_btn.click(fn=lambda: gr.Dropdown(choices=get_installed_models()), outputs=[model_dropdown])
