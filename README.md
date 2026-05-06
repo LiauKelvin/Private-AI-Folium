@@ -1,9 +1,9 @@
 # 🌿 Virtual-Assistant-AI-Folium (Folium AI)
 
 <p align="center">
-  <img src="https://github.com/LiauKelvin/Private-AI-Folium/blob/main/.asset_AI/AI_ICON.png?raw=true" alt="Folium AI Icon" width="150">
-  <img src="https://github.com/LiauKelvin/Private-AI-Folium/blob/main/.asset_AI/Ollama%20picture.webp?raw=true" alt="Folium AI Icon" width="150">
-  <img src="https://github.com/LiauKelvin/Private-AI-Folium/blob/main/.asset_AI/gradio.png?raw=true" alt="Folium AI Icon" width="150">
+  <img src="https://github.com/LiauKelvin/Private-AI-Folium/blob/fall-mode/.asset_AI/leafFall.png?raw=true" alt="Folium AI Icon" width="150">
+  <img src="https://github.com/LiauKelvin/Private-AI-Folium/blob/main/.asset_AI/Ollama%20picture.webp?raw=true" alt="Ollama Icon" width="150">
+  <img src="https://github.com/LiauKelvin/Private-AI-Folium/blob/main/.asset_AI/gradio.png?raw=true" alt="Gradio Icon" width="150">
 </p>
 
 ## 📖 Tentang Program
