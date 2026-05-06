@@ -37,7 +37,7 @@ Bagian ini ditujukan bagi pengembang yang ingin melihat, memodifikasi, atau menj
 2.  **Instalasi Python:** Pastikan **Python 3.12.8** telah terinstal di perangkat Anda. Anda dapat mengunduhnya melalui situs resmi [python.org](https://www.python.org).
 3.  **Clone Repository:** Unduh folder *file* proyek ini melalui tautan GitHub:
     ```bash
-    git clone [https://github.com/LiauKelvin/Private-AI-Folium.git](https://github.com/LiauKelvin/Private-AI-Folium.git)
+    git clone https://github.com/LiauKelvin/Private-AI-Folium.git
     cd Private-AI-Folium
     ```
 4.  **Instal Dependencies:** Instal semua *library* Python yang diperlukan menggunakan perintah berikut di terminal:
