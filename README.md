@@ -64,6 +64,26 @@ Bagian ini ditujukan bagi pengguna akhir yang ingin langsung menggunakan aplikas
 
 ---
 
+## 🤖 Model AI Terbaik yang digunakan (Parameter 2.5B - 3.8B)
+**Model AI** Adalah  adalah sebuah program komputer yang telah dilatih dengan data dalam jumlah besar agar bisa mengenali pola, memprediksi hasil, atau mengambil keputusan secara mandiri. Layaknya "otak" dari kecerdasan buatan (*Artificial Intelligence*), model ini mempelajari cara menyelesaikan perintah atau tugas tertentu tanpa perlu diprogram secara manual langkah demi langkah.
+
+<div align="center">
+  
+|No|**Model AI**|**Parameter**|**Dikembangkan Oleh**|
+|--|------------|-------------|---------------------|
+|1.|Qwen2.5     |2.5B         |Alibaba              |
+|2.|Llama3.2    |3.0B         |Meta                 |
+|3.|Phi4-Mini   |3.8B         |Microsoft            |
+
+</div>
+
+**Keterangan Model AI yang digunakan**
+*   **Qwen2.5:**  Model dengan pengetahuan luas dan kemampuan pada bidang pemrograman serta matematika yang dikembangkan oleh **Alibaba**, yang memiliki Parameter berkisar antara 0,5 hingga 75 miliar token data.
+*   **Llama3.2:** Model dengan kemampuan multibahasa, pencarian, dan peringkasan yang dikembangkan oleh **Meta** dengan Parameter berkisar antara 1 hingga 3 miliar token data.
+*   **Phi4-Mini:** Model dengan data sintetis dan situs web yang telah disaring (filter) dengan fokus untuk memperoleh data berkualitas tinggi dengan penalaran yang efektif, dikembangkan oleh **Microsoft**.
+
+---
+
 ## 🤝 Penutup & Kontribusi
 Terima kasih telah menggunakan **Private-AI-Folium**. Proyek ini dikembangkan sebagai bagian dari penelitian rancang bangun sistem informasi *Virtual Assistant* berbasis AI yang memprioritaskan keamanan data pengguna. 
 
