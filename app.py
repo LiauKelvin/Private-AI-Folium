@@ -12,6 +12,7 @@ from langchain_community.embeddings import OllamaEmbeddings
 # --- Setup & Constants ---
 DB_DIR = "./folium_db"
 HISTORY_FILE = "chat_history.json"
+STOP_GENERATION = False # FIX 1: The global flag for the Soft Brake
 
 if not os.path.exists(DB_DIR):
     os.makedirs(DB_DIR)
@@ -24,6 +25,17 @@ def extract_text(content):
     elif isinstance(content, list): return " ".join([item.get("text", "") for item in content if isinstance(item, dict) and "text" in item])
     elif isinstance(content, dict): return content.get("text", "")
     return str(content)
+
+# --- UI State Managers (FIX 2: Safe Button Swapping) ---
+def prepare_generation():
+    global STOP_GENERATION
+    STOP_GENERATION = False
+    return gr.update(visible=False), gr.update(visible=True)
+
+def halt_generation():
+    global STOP_GENERATION
+    STOP_GENERATION = True
+    return gr.update(visible=True), gr.update(visible=False)
 
 # --- Logic: File Management ---
 def get_installed_models():
@@ -96,15 +108,12 @@ def clear_current_chat():
 def rename_saved_chat(old_name, new_name):
     if not old_name or not new_name or not os.path.exists(HISTORY_FILE):
         return gr.update(), gr.update()
-    
     with open(HISTORY_FILE, "r") as f:
         data = json.load(f)
-        
     if old_name in data and new_name not in data:
         data[new_name] = data.pop(old_name)
         with open(HISTORY_FILE, "w") as f:
             json.dump(data, f)
-            
     new_choices = list(data.keys())
     return gr.update(choices=new_choices, value=new_name), gr.update(value="")
 
@@ -116,6 +125,7 @@ def user_sends_message(user_message, history):
     return "", history
 
 def ai_responds(history, mode, system_prompt, model_name):
+    global STOP_GENERATION # Bring in the global flag
     start_time = time.time()
     if not history: return history
     
@@ -125,7 +135,6 @@ def ai_responds(history, mode, system_prompt, model_name):
     ollama_messages = []
     current_temp = 0.7 
 
-    # Mode Summarize
     if mode == "Summarize":
         try:
             db_data = vector_db.get(limit=15)
@@ -145,7 +154,6 @@ def ai_responds(history, mode, system_prompt, model_name):
             return
 
     else:
-        # Mode RAG
         if mode == "RAG":
             try:
                 results = vector_db.similarity_search(user_message, k=8)
@@ -177,7 +185,6 @@ def ai_responds(history, mode, system_prompt, model_name):
                 yield history
                 return
 
-        # Mode Basic
         elif mode == "Basic":
             sys_msg = system_prompt + "\n\nInstruksi Tambahan: Jawablah dengan ringkas dan langsung ke intinya. Hindari penjelasan panjang lebar kecuali diminta."
             current_temp = 0.7
@@ -197,11 +204,22 @@ def ai_responds(history, mode, system_prompt, model_name):
         model=model_name, 
         messages=ollama_messages, 
         stream=True,
-        options={"temperature": current_temp}
+        options={
+            "temperature": current_temp,
+            "repeat_penalty": 1.15,
+            "num_predict": 800
+        }
     )
     
     partial_msg = ""
     for chunk in response:
+        # FIX 3: The Safe Exit Check
+        if STOP_GENERATION:
+            partial_msg += "\n\n🛑 *[Pembuatan teks dihentikan oleh pengguna]*"
+            history[-1]["content"] = partial_msg
+            yield history
+            break # Instantly and safely leaves the loop!
+            
         partial_msg += chunk['message']['content']
         history[-1]["content"] = partial_msg 
         yield history 
@@ -216,7 +234,6 @@ def ai_responds(history, mode, system_prompt, model_name):
 
 # --- UI Layout ---
 
-# FIX: Added .no-wrap-row to forcefully stop horizontal wrapping
 custom_css = """
 .gradio-container { max-width: 98% !important; width: 100% !important; }
 .logo { display:flex; background-color: #e6fced; height: 70px; border-radius: 8px; justify-content: center; align-items: center; margin-bottom: 10px; }
@@ -236,9 +253,9 @@ with gr.Blocks(title="Folium AI", theme=gr.themes.Soft(primary_hue="green"), css
                 model_dropdown = gr.Dropdown(choices=get_installed_models(), value="qwen2.5:1.5b", label="AI Model", scale=4, min_width=120)
                 refresh_model_btn = gr.Button("🔄 Refresh", scale=1, min_width=50, elem_classes=["refresh-btn"])
             
-            with gr.Accordion("📂 Riwayat Percakapan", open=False):
-                chat_dropdown = gr.Dropdown(choices=get_saved_chats(), label="Pilih Riwayat Percakapan")
-                rename_input = gr.Textbox(show_label=False, placeholder="Ubah Nama & 'enter..'")
+            with gr.Accordion("📂 Riwayat Obrolan", open=False):
+                chat_dropdown = gr.Dropdown(choices=get_saved_chats(), label="Pilih Obrolan Lama")
+                rename_input = gr.Textbox(show_label=False, placeholder="Ketik nama baru & tekan Enter...")
                 with gr.Row():
                     load_btn = gr.Button("Buka", size="sm")
                     del_chat_btn = gr.Button("Hapus", variant="stop", size="sm")
@@ -246,7 +263,7 @@ with gr.Blocks(title="Folium AI", theme=gr.themes.Soft(primary_hue="green"), css
             with gr.Accordion("⚙️ Pengaturan Prompt", open=False):
                 system_prompt_input = gr.Textbox(value="Anda adalah asisten akademik yang ahli.", label="System Prompt", lines=2)
             
-            with gr.Accordion("📚 Dokumen Pribadi", open=False):
+            with gr.Accordion("📚 Dokumen Sekolah", open=False):
                 upload_button = gr.File(label="Upload PDF", file_count="multiple", file_types=[".pdf"])
                 db_status = gr.Textbox(value=get_db_status(), label="Status DB", interactive=False)
                 delete_db_btn = gr.Button("🗑️ Kosongkan Database", variant="stop")
@@ -258,26 +275,51 @@ with gr.Blocks(title="Folium AI", theme=gr.themes.Soft(primary_hue="green"), css
             chatbot = gr.Chatbot(height=500, label="Pusat Belajar")
             
             with gr.Row():
-                msg_input = gr.Textbox(show_label=False, placeholder="Ketik pertanyaan di sini...", scale=8)
-                submit_btn = gr.Button("Kirim ➤", scale=1, variant="primary")
+                msg_input = gr.Textbox(show_label=False, placeholder="Ketik pertanyaan di sini...", scale=7)
+                submit_btn = gr.Button("Kirim", scale=1, variant="primary")
+                stop_btn = gr.Button("🛑 Stop", scale=1, variant="stop", visible=False)
             
             with gr.Row():
                 new_chat_btn = gr.Button("💬 Chat Baru")
                 save_chat_btn = gr.Button("💾 Simpan Chat Ini")
 
-            # --- Events ---
+            # --- Events (FIX 4: Removed all "cancels=[]" to prevent crashing) ---
             refresh_model_btn.click(fn=lambda: gr.Dropdown(choices=get_installed_models()), outputs=[model_dropdown])
             
             rename_input.submit(rename_saved_chat, inputs=[chat_dropdown, rename_input], outputs=[chat_dropdown, rename_input])
             
-            submit_event = msg_input.submit(user_sends_message, [msg_input, chatbot], [msg_input, chatbot], queue=False).then(
+            # Sequence for hitting Enter
+            send_submit = msg_input.submit(
+                prepare_generation, outputs=[submit_btn, stop_btn], queue=False
+            ).then(
+                user_sends_message, [msg_input, chatbot], [msg_input, chatbot], queue=False
+            ).then(
                 ai_responds, [chatbot, mode, system_prompt_input, model_dropdown], chatbot
+            ).then(
+                halt_generation, outputs=[submit_btn, stop_btn], queue=False
             )
-            submit_btn.click(user_sends_message, [msg_input, chatbot], [msg_input, chatbot], queue=False).then(
+
+            # Sequence for clicking "Kirim"
+            send_click = submit_btn.click(
+                prepare_generation, outputs=[submit_btn, stop_btn], queue=False
+            ).then(
+                user_sends_message, [msg_input, chatbot], [msg_input, chatbot], queue=False
+            ).then(
                 ai_responds, [chatbot, mode, system_prompt_input, model_dropdown], chatbot
+            ).then(
+                halt_generation, outputs=[submit_btn, stop_btn], queue=False
             )
             
-            new_chat_btn.click(clear_current_chat, outputs=[chatbot])
+            # The Stop button safely sets the flag and swaps the UI back
+            stop_btn.click(halt_generation, outputs=[submit_btn, stop_btn], queue=False)
+            
+            # New chat button also safely triggers the stop flag if it was generating
+            new_chat_btn.click(
+                halt_generation, outputs=[submit_btn, stop_btn], queue=False
+            ).then(
+                clear_current_chat, outputs=[chatbot]
+            )
+            
             save_chat_btn.click(save_chat, inputs=[chatbot], outputs=[chat_dropdown])
             load_btn.click(load_chat, inputs=[chat_dropdown], outputs=[chatbot])
             del_chat_btn.click(delete_saved_chat, inputs=[chat_dropdown], outputs=[chat_dropdown, chatbot])
