@@ -13,3 +13,6 @@ dist/
 chromadb/
 folium_db/
 silversword_db/
+
+# for ignoring chat
+chat_history.json
