@@ -4,7 +4,7 @@ import os
 import time
 import json
 import datetime
-from langchain_community.document_loaders import PyPDFLoader
+from langchain_community.document_loaders import PyPDFLoader, Docx2txtLoader, UnstructuredPowerPointLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import OllamaEmbeddings
@@ -12,7 +12,6 @@ from langchain_community.embeddings import OllamaEmbeddings
 # --- Setup & Constants ---
 DB_DIR = "./folium_db"
 HISTORY_FILE = "chat_history.json"
-STOP_GENERATION = False # FIX 1: The global flag for the Soft Brake
 
 if not os.path.exists(DB_DIR):
     os.makedirs(DB_DIR)
@@ -26,16 +25,25 @@ def extract_text(content):
     elif isinstance(content, dict): return content.get("text", "")
     return str(content)
 
-# --- UI State Managers (FIX 2: Safe Button Swapping) ---
-def prepare_generation():
-    global STOP_GENERATION
-    STOP_GENERATION = False
-    return gr.update(visible=False), gr.update(visible=True)
+def get_directory_size(directory):
+    """This function to count the weight of folder in byte"""
+    total_size = 0
+    if not os.path.exists(directory):
+        return 0
+    for dirpath, _, filenames in os.walk(directory):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            if not os.path.islink(fp):
+                total_size += os.path.getsize(fp)
+    return total_size
 
-def halt_generation():
-    global STOP_GENERATION
-    STOP_GENERATION = True
-    return gr.update(visible=True), gr.update(visible=False)
+def format_size(size_in_bytes):
+    """Convertion byte to proper format (KB, MB, GB)"""
+    for unit in ['B', 'KB', 'MB', 'GB']:
+        if size_in_bytes < 1024.0:
+            return f"{size_in_bytes:.2f} {unit}"
+        size_in_bytes /= 1024.0
+    return f"{size_in_bytes:.2} TB"
 
 # --- Logic: File Management ---
 def get_installed_models():
@@ -52,18 +60,40 @@ def upload_file(files):
     if not files: return "No files uploaded."
     status = ""
     for f in files:
-        loader = PyPDFLoader(f.name)
-        docs = loader.load()
-        splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-        vector_db.add_documents(splitter.split_documents(docs))
-        status += f"Berhasil: {os.path.basename(f.name)}\n"
+        ext = os.path.splitext(f.name)[1].lower()
+        try:
+            # FEATURE 2: Handle different file types dynamically
+            if ext == ".pdf":
+                loader = PyPDFLoader(f.name)
+            elif ext in [".docx", ".doc"]:
+                loader = Docx2txtLoader(f.name)
+            elif ext in [".pptx", ".ppt"]:
+                loader = UnstructuredPowerPointLoader(f.name)
+            else:
+                status += f"Format tidak didukung: {os.path.basename(f.name)}\n"
+                continue
+
+            docs = loader.load()
+            splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+            vector_db.add_documents(splitter.split_documents(docs))
+            status += f"Berhasil: {os.path.basename(f.name)}\n"
+        except Exception as e:
+            status += f"Gagal {os.path.basename(f.name)}: {str(e)}\n"
+            
     return status
 
 def get_db_status():
     try:
-        return f"Total potongan dokumen: {vector_db._collection.count()}"
+        count = vector_db._collection.count()
+
+        #count the weight of folder DB
+        size_bytes = get_directory_size(DB_DIR)
+        size_formatted = format_size(size_bytes)
+
+        #show the information: 
+        return f"Total potongan dokumen: {count}  |  Beban DB: {size_formatted}"
     except:
-        return "Database kosong."
+        return "Database kosong atau belum siap."
 
 def clear_db():
     global vector_db
@@ -125,7 +155,6 @@ def user_sends_message(user_message, history):
     return "", history
 
 def ai_responds(history, mode, system_prompt, model_name):
-    global STOP_GENERATION # Bring in the global flag
     start_time = time.time()
     if not history: return history
     
@@ -139,7 +168,7 @@ def ai_responds(history, mode, system_prompt, model_name):
         try:
             db_data = vector_db.get(limit=15)
             if not db_data['documents']:
-                history[-1]["content"] = "❌ Database kosong. Silakan upload PDF."
+                history[-1]["content"] = "❌ Database kosong. Silakan upload dokumen terlebih dahulu."
                 yield history
                 return
             context = "\n---\n".join(db_data['documents'])
@@ -164,7 +193,7 @@ def ai_responds(history, mode, system_prompt, model_name):
                     sources_text += f"\n* Sumber {i+1}: {source_name} (Hal {doc.metadata.get('page', 0)})"
                 
                 if not context_chunks:
-                    history[-1]["content"] = "❌ Anda belum mengupload dokumen. Silakan upload PDF!"
+                    history[-1]["content"] = "❌ Anda belum mengupload dokumen. Silakan upload dokumen terlebih dahulu!"
                     yield history
                     return
 
@@ -181,7 +210,7 @@ def ai_responds(history, mode, system_prompt, model_name):
                 current_temp = 0.0 
 
             except Exception as e:
-                history[-1]["content"] = "❌ Database kosong. Silakan upload PDF terlebih dahulu."
+                history[-1]["content"] = "❌ Database kosong. Silakan upload dokumen terlebih dahulu."
                 yield history
                 return
 
@@ -200,29 +229,35 @@ def ai_responds(history, mode, system_prompt, model_name):
                 
         ollama_messages.append({'role': 'user', 'content': user_message})
 
-    response = ollama.chat(
-        model=model_name, 
-        messages=ollama_messages, 
-        stream=True,
-        options={
-            "temperature": current_temp,
-            "repeat_penalty": 1.15,
-            "num_predict": 800
-        }
-    )
-    
-    partial_msg = ""
-    for chunk in response:
-        # FIX 3: The Safe Exit Check
-        if STOP_GENERATION:
-            partial_msg += "\n\n🛑 *[Pembuatan teks dihentikan oleh pengguna]*"
-            history[-1]["content"] = partial_msg
-            yield history
-            break # Instantly and safely leaves the loop!
+    # FEATURE 3: Wrapped Ollama streaming inside a global try-except block to stop infinite loading loops
+    try:
+        response = ollama.chat(
+            model=model_name, 
+            messages=ollama_messages, 
+            stream=True,
+            options={
+                "temperature": current_temp,
+                "repeat_penalty": 1.15,
+                "num_predict": 800
+            }
+        )
+        
+        partial_msg = ""
+        for chunk in response:
+            if 'message' in chunk and 'content' in chunk['message']:
+                partial_msg += chunk['message']['content']
+                history[-1]["content"] = partial_msg 
+                yield history 
+        
+        # Fallback handling if Ollama returns absolutely nothing without explicitly crashing
+        if not partial_msg.strip():
+            partial_msg = "⚠️ Model AI tidak mengembalikan data jawaban. Model mungkin tidak memiliki pengetahuan dasar atau kehabisan memori untuk memproses instruksi ini."
             
-        partial_msg += chunk['message']['content']
-        history[-1]["content"] = partial_msg 
-        yield history 
+    except Exception as e:
+        partial_msg = f"❌ Terjadi gangguan pada AI Model atau koneksi terputus: {str(e)}. Mohon pastikan Ollama berjalan atau coba ganti model lain."
+        history[-1]["content"] = partial_msg
+        yield history
+        return
         
     if mode == "RAG" and sources_text:
         partial_msg += f"\n\n<hr>**Referensi:**{sources_text}"
@@ -234,15 +269,59 @@ def ai_responds(history, mode, system_prompt, model_name):
 
 # --- UI Layout ---
 
+# FEATURE 1: Enhanced Custom CSS targeting font-family, thickness (weight), and color contrast (solid black)
 custom_css = """
 .gradio-container { max-width: 98% !important; width: 100% !important; }
 .logo { display:flex; background-color: #e6fced; height: 70px; border-radius: 8px; justify-content: center; align-items: center; margin-bottom: 10px; }
 footer { display: none !important; }
-.refresh-btn { margin-top: 15px !important; }
+.refresh-btn { margin-top: 28px !important; }
 .no-wrap-row { flex-wrap: nowrap !important; }
+
+/* 🌿 TARGETED CHATBOT STYLES USING ID */
+
+/* 1. Teks Normal: Hitam pekat, font standar, ketebalan Medium (500) agar mudah dibaca tapi tidak full bold */
+#folium-chat .prose p, 
+#folium-chat .prose li, 
+#folium-chat .prose span,
+#folium-chat p {
+    color: #000000 !important; /* Hitam pekat */
+    font-family: 'Inter', 'Arial', sans-serif !important; 
+    font-weight: 500 !important; /* Medium: lebih berisi dari font bawaan, tapi bukan bold */
+    font-size: 17px !important;
+    line-height: 1.6 !important;
+}
+
+/* 2. Teks Tebal (Markdown **bold**): Extra tebal (800) agar sangat kontras dengan teks normal */
+#folium-chat .prose strong,
+#folium-chat strong,
+#folium-chat b {
+    font-weight: 800 !important; /* Extra Bold */
+    color: #000000 !important;
+}
+
+/* 3. Latar Belakang Chat */
+#folium-chat .message.user, #folium-chat .user {
+    background-color: #e6fced !important;
+    border: 2px solid #2e7d32 !important;
+}
+
+#folium-chat .message.bot, #folium-chat .bot {
+    background-color: #f2faf4 !important;
+    border: 2px solid #a3e0b7 !important;
+}
+
+#folium-chat .message hr {
+    border-color: #a3e0b7 !important;
+    border-width: 1px !important;
+}
 """
 
-with gr.Blocks(title="Folium AI", theme=gr.themes.Soft(primary_hue="green"), css=custom_css) as demo:
+# Pengaturan tema dasar bawaan Gradio
+my_theme = gr.themes.Soft(primary_hue="green").set(
+    body_text_color="#000000"
+)
+
+with gr.Blocks(title="Folium AI", theme=my_theme, css=custom_css) as demo:
     gr.HTML("<div class='logo'><h1 style='color:#2e7d32; font-weight: 900; font-size: 1.8em; margin:0;'>🌿 FOLIUM AI</h1></div>")
     
     with gr.Row():
@@ -264,7 +343,8 @@ with gr.Blocks(title="Folium AI", theme=gr.themes.Soft(primary_hue="green"), css
                 system_prompt_input = gr.Textbox(value="Anda adalah asisten akademik yang ahli.", label="System Prompt", lines=2)
             
             with gr.Accordion("📚 Dokumen Sekolah", open=False):
-                upload_button = gr.File(label="Upload PDF", file_count="multiple", file_types=[".pdf"])
+                # FEATURE 2: Updated file_types parameter to support PDF, Word, and PowerPoint
+                upload_button = gr.File(label="Upload Dokumen (PDF, Word, PPTX)", file_count="multiple", file_types=[".pdf", ".docx", ".doc", ".pptx", ".ppt"])
                 db_status = gr.Textbox(value=get_db_status(), label="Status DB", interactive=False)
                 delete_db_btn = gr.Button("🗑️ Kosongkan Database", variant="stop")
                 
@@ -272,7 +352,7 @@ with gr.Blocks(title="Folium AI", theme=gr.themes.Soft(primary_hue="green"), css
                 delete_db_btn.click(clear_db, outputs=[db_status])
 
         with gr.Column(scale=7, min_width=300):
-            chatbot = gr.Chatbot(height=500, label="Pusat Belajar")
+            chatbot = gr.Chatbot(height=500, label="Pusat Belajar", elem_id="folium-chat")
             
             with gr.Row():
                 msg_input = gr.Textbox(show_label=False, placeholder="Ketik pertanyaan di sini...", scale=7)
@@ -283,41 +363,49 @@ with gr.Blocks(title="Folium AI", theme=gr.themes.Soft(primary_hue="green"), css
                 new_chat_btn = gr.Button("💬 Chat Baru")
                 save_chat_btn = gr.Button("💾 Simpan Chat Ini")
 
-            # --- Events (FIX 4: Removed all "cancels=[]" to prevent crashing) ---
+            # --- Events ---
             refresh_model_btn.click(fn=lambda: gr.Dropdown(choices=get_installed_models()), outputs=[model_dropdown])
             
             rename_input.submit(rename_saved_chat, inputs=[chat_dropdown, rename_input], outputs=[chat_dropdown, rename_input])
             
+            def hide_submit_show_stop():
+                return gr.update(visible=False), gr.update(visible=True)
+            
+            def show_submit_hide_stop():
+                return gr.update(visible=True), gr.update(visible=False)
+
             # Sequence for hitting Enter
             send_submit = msg_input.submit(
-                prepare_generation, outputs=[submit_btn, stop_btn], queue=False
+                hide_submit_show_stop, outputs=[submit_btn, stop_btn], queue=False
             ).then(
                 user_sends_message, [msg_input, chatbot], [msg_input, chatbot], queue=False
             ).then(
                 ai_responds, [chatbot, mode, system_prompt_input, model_dropdown], chatbot
-            ).then(
-                halt_generation, outputs=[submit_btn, stop_btn], queue=False
             )
+            send_submit.then(show_submit_hide_stop, outputs=[submit_btn, stop_btn], queue=False)
 
             # Sequence for clicking "Kirim"
             send_click = submit_btn.click(
-                prepare_generation, outputs=[submit_btn, stop_btn], queue=False
+                hide_submit_show_stop, outputs=[submit_btn, stop_btn], queue=False
             ).then(
                 user_sends_message, [msg_input, chatbot], [msg_input, chatbot], queue=False
             ).then(
                 ai_responds, [chatbot, mode, system_prompt_input, model_dropdown], chatbot
+            )
+            send_click.then(show_submit_hide_stop, outputs=[submit_btn, stop_btn], queue=False)
+            
+            # Sequence for hitting "Stop"
+            stop_btn.click(
+                fn=None, inputs=None, outputs=None, cancels=[send_submit, send_click]
             ).then(
-                halt_generation, outputs=[submit_btn, stop_btn], queue=False
+                show_submit_hide_stop, outputs=[submit_btn, stop_btn], queue=False
             )
             
-            # The Stop button safely sets the flag and swaps the UI back
-            stop_btn.click(halt_generation, outputs=[submit_btn, stop_btn], queue=False)
-            
-            # New chat button also safely triggers the stop flag if it was generating
+            # Sequence for hitting "New Chat" while it's generating
             new_chat_btn.click(
-                halt_generation, outputs=[submit_btn, stop_btn], queue=False
+                clear_current_chat, outputs=[chatbot], cancels=[send_submit, send_click]
             ).then(
-                clear_current_chat, outputs=[chatbot]
+                show_submit_hide_stop, outputs=[submit_btn, stop_btn], queue=False
             )
             
             save_chat_btn.click(save_chat, inputs=[chatbot], outputs=[chat_dropdown])
